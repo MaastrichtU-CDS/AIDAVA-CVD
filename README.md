@@ -6,3 +6,4 @@ Supplementary materials for AIDAVA CVD case
 3. Mapping examples with RDF triples
 4. Data elements and computational algorithm (R script) for SMART risk score calculation
 5. Questionnaire example to evaluate user medical literacy and digital skill levels
+6. Figures about the curation performance
