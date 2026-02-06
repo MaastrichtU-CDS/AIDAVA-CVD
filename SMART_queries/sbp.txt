@@ -1,0 +1,57 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?sbp (GROUP_CONCAT(DISTINCT ?sbp_source; SEPARATOR="; ") AS ?sbp_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    #sbp
+    OPTIONAL{
+		?sbpMeasurement aidava:hasPatient ?patient .
+		?sbpMeasurement rdf:type sphn:Measurement .
+    	?sbpMeasurement sphn:hasCode ?sbpCode .
+    	?sbpMeasurement sphn:hasMeasurementDateTime ?sbpDateTime .   
+    	VALUES ?sbpCode {snomed:365980008 sphn-loinc:8480-6}
+        OPTIONAL{
+            ?sbpMeasurement sphn:hasMeasurementMethod ?sbpMeasurementMethod . 
+    		?sbpMeasurementMethod sphn:hasCode ?sbpMMCode .
+            VALUES ?sbpMMCode {sphn-loinc:8480-6 }
+        }        
+        {
+            SELECT (MAX(?sbpDateTime) AS ?max_sbpDateTime)
+            WHERE {
+        		?sbpMeasurement aidava:hasPatient ?patient .
+				?sbpMeasurement rdf:type sphn:Measurement .   
+    			?sbpMeasurement sphn:hasCode ?creatTestCode .
+                ?sbpMeasurement sphn:hasMeasurementDateTime ?sbpDateTime .  
+                VALUES ?sbpCode {snomed:365980008 sphn-loinc:8480-6}
+#                ?sbpMeasurement sphn:hasMeasurementMethod ?sbpMeasurementMethod . 
+#    			?sbpMeasurementMethod sphn:hasCode ?sbpMMCode .
+#            	VALUES ?sbpMMCode {sphn-loinc:8480-6 } 
+        	} 
+        }        
+        FILTER(?sbpDateTime = ?max_sbpDateTime)        
+    	?sbpMeasurement sphn:hasQuantity ?Quantity .
+        # extract source graph
+    	GRAPH ?sbp_source {
+        	?Quantity sphn:hasValue ?sbp .
+        }
+    	?Quantity sphn:hasUnit ?UnitObject .
+    	?UnitObject sphn:hasCode ?UnitCode .
+    	?UnitCode rdfs:label ?unit .
+    } 
+   
+} 
+GROUP BY ?patient ?sbp

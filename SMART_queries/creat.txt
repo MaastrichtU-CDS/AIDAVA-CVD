@@ -1,0 +1,52 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?creatinin ?creatininUnit (GROUP_CONCAT(DISTINCT ?creatinin_source; SEPARATOR="; ") AS ?creatinin_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    #creatinin
+    OPTIONAL {
+        VALUES ?creatTestCode {sphn-loinc:LP145994-2}
+        ?creat aidava:hasPatient ?patient .
+		?creat rdf:type sphn:Measurement .   
+    	?creat sphn:hasLabTest ?creatTest . 
+    	?creatTest sphn:hasCode ?creatTestCode .
+    	?creat sphn:hasQuantity ?creatQuantity . 
+        # extract source graph
+        GRAPH ?creatinin_source {
+    		?creatQuantity sphn:hasValue ?creatinin_value .
+    		?creatQuantity sphn:hasUnit ?creatUnitObject .
+    		?creatUnitObject sphn:hasCode ?creatUnitCode .
+        }
+    	?creatUnitCode rdfs:label ?creatinin_unit .
+        OPTIONAL {?creat sphn:hasMeasurementDateTime ?creatDateTime . }        
+        {
+            SELECT (MAX(?creatDateTime) AS ?max_creatDateTime)
+            WHERE {
+            	VALUES ?creatTestCode {sphn-loinc:LP145994-2}
+        		?creat aidava:hasPatient ?patient .
+				?creat rdf:type sphn:Measurement .   
+    			?creat sphn:hasLabTest ?creatTest . 
+    			?creatTest sphn:hasCode ?creatTestCode .
+                ?creat sphn:hasMeasurementDateTime ?creatDateTime .
+        	} 
+        }        
+        FILTER(?creatDateTime = ?max_creatDateTime)
+    }
+    BIND(IF(BOUND(?creatinin_value), ?creatinin_value, 92) AS ?creatinin)
+    BIND(IF(BOUND(?creatinin_unit), ?creatinin_unit, "mg/dL") AS ?creatininUnit)
+} 
+GROUP BY ?patient ?creatinin ?creatininUnit 

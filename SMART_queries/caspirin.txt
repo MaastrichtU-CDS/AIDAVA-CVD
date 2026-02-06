@@ -1,0 +1,41 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?usingAnticoag (GROUP_CONCAT(DISTINCT ?anticoag_source; SEPARATOR="; ") AS ?anticoag_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    # usingAnticoag
+    OPTIONAL {
+        VALUES ?drugType {atc:B01AC}
+        ?anticoag aidava:hasPatient ?patient .
+		?anticoag rdf:type sphn:DrugAdministrationEvent .
+        # extract source graph
+        GRAPH ?anticoag_source {
+        	?anticoag sphn:hasDrug ?acDrug .
+        	?acDrug sphn:hasActiveIngredient ?acSubstance .
+        	?acSubstance sphn:hasCode ?drugType .
+    		?anticoag sphn:hasStartDateTime ?acStartDateTime .
+    		OPTIONAL {?anticoag sphn:hasEndDateTime ?acEndDateTime .}
+        }
+        #OPTIONAL {?drugType rdfs:label ?drugTypeLabel .}
+    }
+    BIND(IF((?drugType = atc:B01AC) || EXISTS{?drugType rdfs:subClassOf atc:B01AC}, 
+            IF(?acStartDateTime <=?currentDateTime, 
+                IF(BOUND(?acEndDateTime), IF(?acEndDateTime>=?currentDateTime, 1, 0), 1), 0), 0
+        ) AS ?anticoag_status)
+    BIND(IF(BOUND(?anticoag_status), ?anticoag_status, 0) AS ?usingAnticoag)
+} 
+GROUP BY ?patient ?usingAnticoag 

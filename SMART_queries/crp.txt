@@ -1,0 +1,55 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?crpValue ?crpUnit (GROUP_CONCAT(DISTINCT ?crp_source; SEPARATOR="; ") AS ?crp_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    #CRP
+    OPTIONAL {
+        VALUES ?crpTestCode {sphn-loinc:30522-7}
+        ?crp aidava:hasPatient ?patient .
+		?crp rdf:type sphn:Measurement .   
+    	?crp sphn:hasLabTest ?crpTest . 
+    	?crpTest sphn:hasCode ?crpTestCode .
+    	?crp sphn:hasQuantity ?crpQuantity . 
+        # extract source graph
+        GRAPH ?crp_source {
+    		?crpQuantity sphn:hasValue ?crp_Value .
+    		?crpQuantity sphn:hasUnit ?crpUnitObject .
+    		?crpUnitObject sphn:hasCode ?crpUnitCode .
+        }
+    	?crpUnitCode rdfs:label ?crp_Unit .
+        OPTIONAL {?crp sphn:hasMeasurementDateTime ?crpDateTime . }        
+        {
+            SELECT (MAX(?crpDateTime) AS ?max_crpDateTime)
+            WHERE {
+            	VALUES ?crpTestCode {sphn-loinc:30522-7}
+        		?crp aidava:hasPatient ?patient .
+				?crp rdf:type sphn:Measurement .   
+    			?crp sphn:hasLabTest ?crpTest . 
+    			?crpTest sphn:hasCode ?crpTestCode .
+                ?crp sphn:hasMeasurementDateTime ?crpDateTime .
+    			?crp sphn:hasQuantity ?crpQuantity . 
+    			?crpQuantity sphn:hasValue ?crp_Value .
+                FILTER(?crp_Value < 15)
+        	} 
+        }        
+        FILTER(?crpDateTime = ?max_crpDateTime)
+    }
+    BIND(IF(BOUND(?crp_Value), ?crp_Value, 22) AS ?crpValue)
+    BIND(IF(BOUND(?crp_Unit), ?crp_Unit, "mg/dL") AS ?crpUnit)
+} 
+GROUP BY ?patient ?crpValue ?crpUnit

@@ -1,0 +1,53 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?aaa (MAX(?yrs_3)AS ?aaa_yrs) (GROUP_CONCAT(DISTINCT ?aaa_source; SEPARATOR="; ") AS ?aaa_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    #aorticAneurysm
+    OPTIONAL {
+        VALUES ?type {sphn:ProblemCondition sphn:Procedure}
+    	?factor3 aidava:hasPatient ?patient .
+		?factor3 rdf:type ?type .
+        # extract source graph
+        GRAPH ?aaa_source {
+    		?factor3 sphn:hasCode ?Factor3GeneralCode .
+        }
+    	OPTIONAL {
+            ?factor3 sphn:hasDateTime|sphn:hasStartDateTime|sphn:hasOnsetDateTime|sphn:hasRecordDateTime ?DateTime3 .
+            BIND(YEAR(?DateTime3) AS ?year3)
+        }
+        BIND(IF(BOUND(?year3), (?currentYear - ?year3), 1) AS ?yrs_3)
+    	
+    	# Take into account terminologies with mapping to snomed:
+        {
+            {BIND(?Factor3GeneralCode AS ?Factor3Code)} 
+            UNION
+            {?Factor3Code skos:exactMatch ?Factor3GeneralCode}
+        }   
+    	{VALUES ?Factor3Code {snomed:233985008 snomed:67362008 snomed:32907006} } 
+    	UNION 
+    	{?Factor3Code rdfs:subClassOf snomed:233985008}
+    	UNION 
+    	{?Factor3Code rdfs:subClassOf snomed:67362008}
+    	UNION 
+    	{?Factor3Code rdfs:subClassOf snomed:32907006}
+        OPTIONAL {?Factor3Code skos:prefLabel ?Factor3CodeValue .}
+    } 
+    BIND(IF(BOUND(?Factor3Code), 1, 0) AS ?aaa)
+   
+} 
+GROUP BY ?patient ?aaa 

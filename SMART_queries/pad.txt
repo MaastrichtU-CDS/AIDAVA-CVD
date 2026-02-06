@@ -1,0 +1,53 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?pad (MAX(?yrs_4) AS ?pad_yrs) (GROUP_CONCAT(DISTINCT ?pad_source; SEPARATOR="; ") AS ?pad_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    #peripheralArteryDisease
+    OPTIONAL{
+        VALUES ?type {sphn:ProblemCondition sphn:Procedure}
+    	?factor4 aidava:hasPatient ?patient .
+		?factor4 rdf:type ?type .
+        # extract source graph
+        GRAPH ?pad_source {
+    		?factor4 sphn:hasCode ?Factor4GeneralCode .
+        }
+    	OPTIONAL {
+            ?factor4 sphn:hasDateTime|sphn:hasStartDateTime|sphn:hasOnsetDateTime|sphn:hasRecordDateTime ?DateTime4 .
+            BIND(YEAR(?DateTime4) AS ?year4)
+        }
+        BIND(IF(BOUND(?year4), (?currentYear - ?year4), 1) AS ?yrs_4)
+        
+    	# Take into account terminologies with mapping to snomed:
+        {
+            {BIND(?Factor4GeneralCode AS ?Factor4Code)} 
+            UNION
+            {?Factor4Code skos:exactMatch ?Factor4GeneralCode}
+        } 
+    	{VALUES ?Factor4Code {snomed:840580004 snomed:63491006 snomed:446841001 snomed:387713003} } 
+    	UNION 
+    	{?Factor4Code rdfs:subClassOf snomed:840580004}
+    	UNION 
+    	{?Factor4Code rdfs:subClassOf snomed:63491006}
+    	UNION 
+    	{?Factor4Code rdfs:subClassOf snomed:446841001}
+        
+    }
+    BIND(IF(BOUND(?Factor4Code), 1, 0) AS ?pad)
+   
+} 
+GROUP BY ?patient ?pad 

@@ -1,0 +1,32 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?sex (GROUP_CONCAT(DISTINCT ?sex_source; SEPARATOR="; ") AS ?sex_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    # sex
+    OPTIONAL {
+    	?patient aidava:hasAdministrativeGender ?AdministrativeGender .
+    	?AdministrativeGender rdf:type sphn:AdministrativeGender .
+    	# extract source graph
+    	GRAPH ?sex_source {
+        	?AdministrativeGender sphn:hasCode ?gender_code .
+    	}
+    }
+    BIND(
+        IF(?gender_code = snomed:248153007, 1, 
+            IF(?gender_code = snomed:248152002, 0, 0))
+        AS ?sex
+    )
+   
+} 
+GROUP BY ?patient ?sex

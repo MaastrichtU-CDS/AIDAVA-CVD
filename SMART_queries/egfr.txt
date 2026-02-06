@@ -1,0 +1,51 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?eGFR ?eGFRUnit (GROUP_CONCAT(DISTINCT ?egfr_source; SEPARATOR="; ") AS ?egfr_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    #eGFR
+    OPTIONAL {
+        VALUES ?egfrTestCode {sphn-loinc:62238-1}
+        ?egfr aidava:hasPatient ?patient .
+		?egfr rdf:type sphn:Measurement .   
+    	?egfr sphn:hasLabTest ?egfrTest . 
+    	?egfrTest sphn:hasCode ?egfrTestCode .
+    	?egfr sphn:hasQuantity ?egfrQuantity .
+        # extract source graph
+        GRAPH ?egfr_source {
+    		?egfrQuantity sphn:hasValue ?eGFR .
+    		?egfrQuantity sphn:hasUnit ?egfrUnitObject .
+    		?egfrUnitObject sphn:hasCode ?egfrUnitCode .
+        }
+    	?egfrUnitCode rdfs:label ?eGFRUnit .
+        OPTIONAL {?egfr sphn:hasMeasurementDateTime ?egfrDateTime . }        
+        {
+            SELECT (MAX(?egfrDateTime) AS ?max_egfrDateTime)
+            WHERE {
+            	VALUES ?egfrTestCode {sphn-loinc:62238-1}
+        		?egfr aidava:hasPatient ?patient .
+				?egfr rdf:type sphn:Measurement .   
+    			?egfr sphn:hasLabTest ?egfrTest . 
+    			?egfrTest sphn:hasCode ?egfrTestCode .
+                ?egfr sphn:hasMeasurementDateTime ?egfrDateTime .
+        	} 
+        }        
+        FILTER(?egfrDateTime = ?max_egfrDateTime)
+    }
+   
+} 
+GROUP BY ?patient ?eGFR ?eGFRUnit 

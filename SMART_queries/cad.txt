@@ -1,0 +1,56 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?cad (MAX(?yrs_1) AS ?cad_yrs) (GROUP_CONCAT(DISTINCT ?cad_source; SEPARATOR="; ") AS ?cad_sources)
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    #coronaryArteryDisease
+    OPTIONAL {
+        VALUES ?type {sphn:ProblemCondition sphn:Procedure}
+        ?factor1 aidava:hasPatient ?patient .
+		?factor1 rdf:type ?type .
+        # extract source graph
+        GRAPH ?cad_source {
+    		?factor1 sphn:hasCode ?Factor1GeneralCode .
+        }        
+        OPTIONAL {
+            ?factor1 sphn:hasDateTime|sphn:hasStartDateTime|sphn:hasOnsetDateTime|sphn:hasRecordDateTime ?DateTime1 .
+            BIND(YEAR(?DateTime1) AS ?year1)
+        }
+        BIND(IF(BOUND(?year1), (?currentYear - ?year1), 1) AS ?yrs_1)
+        
+        # Take into account terminologies with mapping to snomed:
+        {
+            {BIND(?Factor1GeneralCode AS ?Factor1Code)} 
+            UNION
+            {?Factor1Code skos:exactMatch ?Factor1GeneralCode}
+        }                
+        {VALUES ?Factor1Code {snomed:53741008 snomed:394659003 snomed:22298006 snomed:415070008 snomed:232717009} } 
+    	UNION 
+    	{?Factor1Code rdfs:subClassOf snomed:53741008}
+    	UNION 
+    	{?Factor1Code rdfs:subClassOf snomed:394659003}
+    	UNION 
+    	{?Factor1Code rdfs:subClassOf snomed:22298006}
+    	UNION 
+    	{?Factor1Code rdfs:subClassOf snomed:415070008}
+    	UNION 
+    	{?Factor1Code rdfs:subClassOf snomed:232717009}
+    }    
+    BIND(IF(BOUND(?Factor1Code), 1, 0) AS ?cad)
+   
+} 
+GROUP BY ?patient ?cad 

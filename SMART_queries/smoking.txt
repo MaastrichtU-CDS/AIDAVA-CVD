@@ -1,0 +1,38 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+
+SELECT DISTINCT (IF(BOUND(?patient), ?patient, ?patient) AS ?patient1) (IF(BOUND(?isSmoking), ?isSmoking, 0) AS ?isSmoking1) (GROUP_CONCAT(DISTINCT ?smoking_source; SEPARATOR="; ") AS ?smoking_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    # VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}  
+    BIND(<https://rdf.aidava.eu/resource/Patient/30> AS ?patient)
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    # isSmoking
+    OPTIONAL {
+    	?smoking aidava:hasPatient ?patient .
+		?smoking rdf:type sphn:ProblemCondition .
+    	# extract source graph
+    	GRAPH ?smoking_source {
+    		?smoking sphn:hasCode ?smokingCode .
+    	}
+    	?smokingCode rdfs:subClassOf snomed:365980008 .
+    	?smoking sphn:hasStatusCode ?smokingStatusCode .
+    }
+    BIND(IF(BOUND(?smokingCode), ?smokingCode, 0) AS ?smoking_status)
+	BIND(
+        IF(EXISTS{?smoking_status rdfs:subClassOf snomed:8392000}, 0, 
+            IF(EXISTS{?smoking_status rdfs:subClassOf snomed:77176002}, 1,
+            0))
+        AS ?isSmoking
+    )
+   
+} 
+GROUP BY ?patient ?isSmoking ?smoking_status

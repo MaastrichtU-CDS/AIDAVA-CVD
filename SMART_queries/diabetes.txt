@@ -1,0 +1,44 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?diabetesDiagnosis (GROUP_CONCAT(DISTINCT ?diabetes_source; SEPARATOR="; ") AS ?diabetes_sources) 
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    #diabetesDiagnosis
+    OPTIONAL {
+        ?diabetes aidava:hasPatient ?patient .
+		?diabetes rdf:type sphn:ProblemCondition .
+        # extract source graph
+        GRAPH ?diabetes_source {
+    		?diabetes sphn:hasCode ?diabetesGeneralCode .
+        }        
+        # Take into account terminologies with mapping to snomed:
+        {
+            {BIND(?diabetesGeneralCode AS ?diabetesCode)} 
+            UNION
+            {?diabetesCode skos:exactMatch ?diabetesGeneralCode}
+        }
+        {VALUES ?diabetesCode {snomed:73211009} } UNION {?diabetesCode rdfs:subClassOf snomed:73211009}
+    }
+    BIND(IF(BOUND(?diabetesCode), ?diabetesCode, 0) AS ?diabetes_status)
+    BIND(
+        IF(?diabetes_status = snomed:73211009, 1, 
+            IF(EXISTS{?diabetes_status rdfs:subClassOf snomed:73211009}, 1, 0))
+        AS ?diabetesDiagnosis
+    )    
+   
+} 
+GROUP BY ?patient ?diabetesDiagnosis

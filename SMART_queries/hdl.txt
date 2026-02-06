@@ -1,0 +1,53 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX aidava: <https://biomedit.ch/rdf/sphn-ontology/AIDAVA/>
+PREFIX sphn: <https://biomedit.ch/rdf/sphn-ontology/sphn#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX snomed: <http://snomed.info/id/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX sphn-loinc: <https://biomedit.ch/rdf/sphn-resource/loinc/>
+PREFIX atc: <https://www.whocc.no/atc_ddd_index/?code=>
+SELECT DISTINCT ?patient ?hdlCholesterol ?hdlcUnit (GROUP_CONCAT(DISTINCT ?hdlCholesterol_source; SEPARATOR="; ") AS ?hdlCholesterol_sources)
+WHERE { 
+    # To aplly a given URI this can be used: 
+    VALUES ?patient {<https://rdf.aidava.eu/resource/Patient/30>}    
+    
+    ?g <http://rdf.aidava.eu/metadata#belongsTo> ?patient .
+    
+    #Current date and year
+    BIND(now() AS ?currentDateTime) .
+    BIND(YEAR(?currentDateTime) AS ?currentYear)
+    
+    #hdlCholesterol
+    OPTIONAL {
+        VALUES ?hdlcTestCode {sphn-loinc:14646-4}
+        ?hdlc aidava:hasPatient ?patient .
+		?hdlc rdf:type sphn:Measurement .
+    	?hdlc sphn:hasLabTest ?hdlcTest . 
+    	?hdlcTest sphn:hasCode ?hdlcTestCode .
+    	?hdlc sphn:hasQuantity ?hdlcQuantity .
+        # extract source graph
+        GRAPH ?hdlcCholesterol_source {
+    		?hdlcQuantity sphn:hasValue ?hdlc_value .
+    		?hdlcQuantity sphn:hasUnit ?hdlcUnitObject .
+    		?hdlcUnitObject sphn:hasCode ?hdlcUnitCode .
+        }
+    	?hdlcUnitCode rdfs:label ?hdlc_unit .    
+        OPTIONAL {?hdlc sphn:hasMeasurementDateTime ?hdlcDateTime .}    
+        {
+            SELECT (MAX(?tcDateTime) AS ?max_tcDateTime)
+            WHERE {
+            	VALUES ?hdlcTestCode {sphn-loinc:14646-4}
+        		?hdlc aidava:hasPatient ?patient .
+				?hdlc rdf:type sphn:Measurement .
+    			?hdlc sphn:hasLabTest ?hdlcTest . 
+    			?hdlcTest sphn:hasCode ?hdlcTestCode .
+                OPTIONAL {?hdlc sphn:hasMeasurementDateTime ?hdlcDateTime .} 
+        	} 
+        }        
+        FILTER(?hdlcDateTime = ?max_hdlcDateTime)
+    }
+    BIND(IF(BOUND(?hdlc_value), ?hdlc_value, 1.2) AS ?hdlCholesterol)
+    BIND(IF(BOUND(?hdlc_unit), ?hdlc_unit, "mmol/L") AS ?hdlcUnit)
+   
+} 
+GROUP BY ?patient ?hdlCholesterol ?hdlcUnit
